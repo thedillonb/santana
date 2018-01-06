@@ -5,9 +5,15 @@ import (
 	"os"
 	"sync"
 
-	"github.com/edsrzf/mmap-go"
+	mmap "github.com/edsrzf/mmap-go"
 	"github.com/pkg/errors"
 )
+
+type indexOptions struct {
+	path       string
+	baseOffset int64
+	maxBytes   int
+}
 
 type index struct {
 	indexOptions
@@ -18,20 +24,17 @@ type index struct {
 	mmap       mmap.MMap
 }
 
-type indexOptions struct {
-	path       string
-	baseOffset int64
-	maxBytes   int
-}
-
 const fileEntrySize = 8
 
 func newIndex(opts indexOptions) (idx *index, err error) {
 	if opts.maxBytes == 0 {
-		opts.maxBytes = 1024 * 1024 * 8
+		return nil, errors.New("invalid index max bytes")
 	}
 
-	ridx := &index{indexOptions: opts}
+	ridx := &index{
+		indexOptions: opts,
+		lastOffset:   opts.baseOffset,
+	}
 
 	ridx.file, err = os.OpenFile(opts.path, os.O_CREATE|os.O_RDWR, 0666)
 	if err != nil {
@@ -72,10 +75,13 @@ func (idx *index) append(offset int64, position int64) error {
 	if idx.position > 0 && offset <= idx.lastOffset {
 		return errors.New("offset must be greater than previous offsets")
 	}
+	if idx.isFull() {
+		return errors.New("index is full")
+	}
 
 	data := make([]byte, fileEntrySize)
-	binary.LittleEndian.PutUint32(data[:4], uint32(offset-idx.baseOffset))
-	binary.LittleEndian.PutUint32(data[4:8], uint32(position))
+	binary.BigEndian.PutUint32(data[:4], uint32(offset-idx.baseOffset))
+	binary.BigEndian.PutUint32(data[4:8], uint32(position))
 
 	idx.mutex.Lock()
 	copy(idx.mmap[idx.position:idx.position+fileEntrySize], data)
@@ -89,7 +95,7 @@ func (idx *index) append(offset int64, position int64) error {
 
 func (idx *index) lookup(offset int64) (position int64, err error) {
 	if offset < idx.baseOffset || offset > idx.lastOffset {
-		err = errors.New("offset outside of range")
+		err = errors.Errorf("offset outside of range: %v < %v < %v ", idx.baseOffset, offset, idx.lastOffset)
 		return
 	}
 
@@ -98,15 +104,15 @@ func (idx *index) lookup(offset int64) (position int64, err error) {
 }
 
 func (idx *index) read(n int64) (offset int64, position int64, err error) {
-	if n+fileEntrySize >= int64(len(idx.mmap)) {
+	if n+fileEntrySize > int64(len(idx.mmap)) {
 		err = errors.New("read out of range")
 		return
 	}
 
 	buff := make([]byte, fileEntrySize)
 	copy(buff, idx.mmap[n:n+fileEntrySize])
-	offset = int64(binary.LittleEndian.Uint32(buff[0:4])) + idx.baseOffset
-	position = int64(binary.LittleEndian.Uint32(buff[4:8]))
+	offset = int64(binary.BigEndian.Uint32(buff[0:4])) + idx.baseOffset
+	position = int64(binary.BigEndian.Uint32(buff[4:8]))
 	return
 }
 
@@ -115,7 +121,7 @@ func (idx *index) getEntries() int64 {
 }
 
 func (idx *index) isFull() bool {
-	return idx.getEntries() >= int64(len(idx.mmap)/fileEntrySize)
+	return idx.position >= int64(idx.maxBytes)
 }
 
 func (idx *index) name() string {
@@ -154,7 +160,28 @@ func (idx *index) valid() error {
 	}
 
 	if idx.position%fileEntrySize != 0 {
-		return errors.New("corrupt index")
+		return errors.Errorf(
+			"index position %v does not align with entry size %v",
+			idx.position, fileEntrySize)
+	}
+
+	// Need something to catch the case where a log has been released
+	// without being closed propertly. The size is then MAX so it seems as
+	// if there are entries but they're invalid.
+	if idx.position > fileEntrySize*2 {
+		off1, _, err := idx.read(idx.position - fileEntrySize)
+		if err != nil {
+			return err
+		}
+
+		off2, _, err := idx.read(idx.position - fileEntrySize*2)
+		if err != nil {
+			return err
+		}
+
+		if off1 == off2 {
+			return errors.Errorf("index contains non-incrementing offsets")
+		}
 	}
 
 	return nil

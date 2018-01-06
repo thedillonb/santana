@@ -5,6 +5,9 @@ LDFLAGS=-ldflags "-X main.build=${BUILD}"
 
 .PHONY: build clean
 
+gen:
+	protoc -I protocol/ protocol/protocol.proto --go_out=plugins=grpc:protocol
+
 build: clean
 	go build ${LDFLAGS} -o ${BINARY} ${PACKAGE}
 

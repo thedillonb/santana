@@ -15,6 +15,13 @@ const (
 	indexNameFormat = "%020d.index"
 )
 
+type segmentOptions struct {
+	path         string
+	baseOffset   int64
+	maxLogSize   int
+	maxIndexSize int
+}
+
 type segment struct {
 	segmentOptions
 	log      *os.File
@@ -23,15 +30,12 @@ type segment struct {
 	position int64
 }
 
-type segmentOptions struct {
-	path       string
-	baseOffset int64
-	maxSize    uint32
-}
-
 func newSegment(opts segmentOptions) (seg *segment, err error) {
-	if opts.maxSize == 0 {
-		opts.maxSize = 1024 * 1024 * 1024
+	if opts.maxLogSize <= 0 {
+		return nil, errors.New("invalid maxLogSize")
+	}
+	if opts.maxIndexSize <= 0 {
+		return nil, errors.New("invalid maxIndexSize")
 	}
 
 	rseg := &segment{segmentOptions: opts}
@@ -52,6 +56,7 @@ func newSegment(opts segmentOptions) (seg *segment, err error) {
 	indexOpts := indexOptions{
 		path:       indexPath,
 		baseOffset: opts.baseOffset,
+		maxBytes:   opts.maxIndexSize,
 	}
 
 	if rseg.index, err = newIndex(indexOpts); err != nil {
@@ -61,18 +66,18 @@ func newSegment(opts segmentOptions) (seg *segment, err error) {
 	rebuildIndex := false
 
 	if rseg.index.position == 0 && rseg.position > 0 {
-		fmt.Printf("Index missing data... rebuilding\n")
+		fmt.Printf("%s missing data... rebuilding\n", rseg.index.name())
 		rebuildIndex = true
 	}
 
 	if err = rseg.index.valid(); err != nil {
-		fmt.Printf("Index is not valid... rebuilding\n")
+		logger.Warn("%s is not valid: %s... rebuilding\n", rseg.index.name(), err.Error())
 		rebuildIndex = true
 	}
 
 	if rebuildIndex == true {
 		if err = rseg.rebuildIndex(); err != nil {
-			fmt.Printf("Error rebuilding index: %v", err.Error())
+			fmt.Printf("Error rebuilding index %s: %s", rseg.index.name(), err.Error())
 		}
 	}
 
@@ -84,6 +89,9 @@ func (s *segment) append(offset int64, b []byte) error {
 	if offset < s.baseOffset {
 		return errors.New("invalid offset")
 	}
+	if s.isFull() {
+		return errors.New("log is full")
+	}
 
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
@@ -93,7 +101,7 @@ func (s *segment) append(offset int64, b []byte) error {
 		offset: int32(offset - s.baseOffset),
 	}
 
-	n, err := msg.serialize(s.log)
+	n, err := msg.writeTo(s.log)
 	if err != nil {
 		return err
 	}
@@ -110,8 +118,6 @@ func (s *segment) readAt(b []byte, offset int64) (n int, err error) {
 		return 0, err
 	}
 
-	fmt.Printf("found index at %v\n", position)
-
 	length := make([]byte, 4)
 	n, err = s.log.ReadAt(length, int64(position))
 	if err != nil {
@@ -121,7 +127,7 @@ func (s *segment) readAt(b []byte, offset int64) (n int, err error) {
 		return n, errors.New("not enough data was read")
 	}
 
-	msgLen := binary.LittleEndian.Uint32(length)
+	msgLen := binary.BigEndian.Uint32(length)
 	if int(msgLen) > len(b) {
 		return n, errors.New("not enough buffer space for message")
 	}
@@ -160,10 +166,13 @@ func (s *segment) rebuildIndex() error {
 }
 
 func (s *segment) getNextOffset() (offset int64, err error) {
-	pos, err := s.index.lookup(s.index.lastOffset)
-	logger.Debug("Looking up last offset with index offset = %v\n", s.index.lastOffset)
+	var pos int64
+	if pos, err = s.index.lookup(s.index.lastOffset); err != nil {
+		return
+	}
 
 	iter := newSegmentIterator(s, pos)
+	offset = s.baseOffset
 
 	for {
 		msg, ok, err := iter.next()
@@ -175,7 +184,7 @@ func (s *segment) getNextOffset() (offset int64, err error) {
 			return offset, nil
 		}
 
-		offset = msg.offset + 1
+		offset = s.baseOffset + msg.offset + 1
 	}
 }
 
@@ -204,6 +213,10 @@ func (s *segment) delete() error {
 	}
 
 	return s.index.delete()
+}
+
+func (s *segment) isFull() bool {
+	return s.position >= int64(s.maxLogSize) || s.index.isFull()
 }
 
 func (s *segment) flush() error {

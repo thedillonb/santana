@@ -5,7 +5,6 @@ import (
 	"os"
 	"path"
 	"santana/commitlog"
-	"strconv"
 	"strings"
 
 	ishell "gopkg.in/abiosoft/ishell.v2"
@@ -13,40 +12,64 @@ import (
 
 func main() {
 	shell := ishell.New()
-	path := path.Join(os.TempDir(), "santana")
 
-	commitLogOptions := commitlog.CommitLogOptions{
-		Path: path,
+	path := path.Join(os.TempDir(), "santana")
+	if err := os.MkdirAll(path, 0755); err != nil {
+		panic(err)
 	}
 
-	log, err := commitlog.NewCommitLog(commitLogOptions)
+	fmt.Printf("Path: %s\n", path)
+
+	mgrOpts := commitlog.LogManagerOptions{
+		Dir: path,
+	}
+
+	mgr, err := commitlog.NewLogManager(mgrOpts)
 	if err != nil {
 		panic(err)
 	}
 
+	fmt.Printf("Loaded logs: %v\n", mgr.GetLogs())
+
 	closeLog := func() {
 		shell.Printf("Closing log...\n")
-		_ = log.Close()
+		mgr.Close()
 	}
 
 	defer closeLog()
 
-	// b := make([]byte, 1024)
-	// n, err := log.ReadAt(b, 1)
-	// if err != nil {
-	// 	panic(err)
-	// }
+	shell.AddCmd(&ishell.Cmd{
+		Help: "Create a log",
+		Name: "create",
+		Func: func(c *ishell.Context) {
+			name := strings.Join(c.Args, " ")
+			opts := commitlog.CommitLogOptions{
+				LogMaxBytes: 25,
+			}
 
-	// shell.Printf("Read %v bytes: %v\n", n, string(b))
+			if _, err := mgr.CreateLog(name, opts); err != nil {
+				c.Err(err)
+				return
+			}
 
-	shell.Printf("Log file: %v\n", path)
+			c.Printf("Log %s created!\n", name)
+		},
+	})
 
 	shell.AddCmd(&ishell.Cmd{
 		Help: "Add an item into the log",
 		Name: "add",
 		Func: func(c *ishell.Context) {
-			data := []byte(strings.Join(c.Args, " "))
-			offset, err := log.Append(data)
+			log := c.Args[0]
+			data := []byte(strings.Join(c.Args[1:], " "))
+
+			l, err := mgr.GetLog(log)
+			if err != nil {
+				c.Err(err)
+				return
+			}
+
+			offset, err := l.Append(data)
 			if err != nil {
 				c.Err(err)
 				return
@@ -57,36 +80,61 @@ func main() {
 	})
 
 	shell.AddCmd(&ishell.Cmd{
-		Help: "List all the entries within the log",
+		Help: "List all the logs",
 		Name: "list",
 		Func: func(c *ishell.Context) {
-			c.Printf("Going to do the stuff")
+			for _, l := range mgr.GetLogs() {
+				c.Printf("%s\n", l)
+			}
 		},
 	})
+
+	shell.AddCmd(&ishell.Cmd{
+		Help: "Read all entries from a log",
+		Name: "readall",
+		Func: func(c *ishell.Context) {
+			log := c.Args[0]
+			l, err := mgr.GetLog(log)
+			if err != nil {
+				c.Err(err)
+				return
+			}
+
+			for i := 0; ; i++ {
+				b := make([]byte, 1024)
+				n, err := l.ReadAt(b, int64(i))
+				if err != nil {
+					c.Err(err)
+					return
+				}
+
+				c.Printf("Read %v bytes: %v\n", n-4, string(b[4:]))
+			}
+		}})
 
 	shell.AddCmd(&ishell.Cmd{
 		Help: "Read an entry within the log",
 		Name: "read",
 		Func: func(c *ishell.Context) {
-			if len(c.Args) != 1 {
-				c.Err(fmt.Errorf("missing arguments"))
-				return
-			}
+			// if len(c.Args) != 1 {
+			// 	c.Err(fmt.Errorf("missing arguments"))
+			// 	return
+			// }
 
-			i, err := strconv.Atoi(c.Args[0])
-			if err != nil {
-				c.Err(err)
-				return
-			}
+			// i, err := strconv.Atoi(c.Args[0])
+			// if err != nil {
+			// 	c.Err(err)
+			// 	return
+			// }
 
-			b := make([]byte, 1024)
-			n, err := log.ReadAt(b, int64(i))
-			if err != nil {
-				c.Err(err)
-				return
-			}
+			// b := make([]byte, 1024)
+			// n, err := log.ReadAt(b, int64(i))
+			// if err != nil {
+			// 	c.Err(err)
+			// 	return
+			// }
 
-			c.Printf("Read %v bytes: %v\n", n, string(b))
+			// c.Printf("Read %v bytes: %v\n", n, string(b))
 		},
 	})
 

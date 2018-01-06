@@ -14,10 +14,40 @@
   revision = "3f9db97f856818214da2e1057f8ad84803971cff"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/golang/protobuf"
+  packages = ["proto","protoc-gen-go/descriptor","ptypes","ptypes/any","ptypes/duration","ptypes/timestamp"]
+  revision = "1e59b77b52bf8e4b449a57e6f79f21226d571845"
+
+[[projects]]
   name = "github.com/pkg/errors"
   packages = ["."]
   revision = "645ef00459ed84a119197bfb8d8205042c6df63d"
   version = "v0.8.0"
+
+[[projects]]
+  branch = "master"
+  name = "golang.org/x/net"
+  packages = ["context","http2","http2/hpack","idna","internal/timeseries","lex/httplex","trace"]
+  revision = "d866cfc389cec985d6fda2859936a575a55a3ab6"
+
+[[projects]]
+  branch = "master"
+  name = "golang.org/x/text"
+  packages = ["collate","collate/build","internal/colltab","internal/gen","internal/tag","internal/triegen","internal/ucd","language","secure/bidirule","transform","unicode/bidi","unicode/cldr","unicode/norm","unicode/rangetable"]
+  revision = "e19ae1496984b1c655b8044a65c0300a3c878dd3"
+
+[[projects]]
+  branch = "master"
+  name = "google.golang.org/genproto"
+  packages = ["googleapis/rpc/status"]
+  revision = "a8101f21cf983e773d0c1133ebc5424792003214"
+
+[[projects]]
+  name = "google.golang.org/grpc"
+  packages = [".","balancer","balancer/base","balancer/roundrobin","codes","connectivity","credentials","encoding","grpclb/grpc_lb_v1/messages","grpclog","internal","keepalive","metadata","naming","peer","reflection","reflection/grpc_reflection_v1alpha","resolver","resolver/dns","resolver/passthrough","stats","status","tap","transport"]
+  revision = "f3955b8e9e244dd4dd4bc4f7b7a23a8445400a76"
+  version = "v1.9.0"
 
 [[projects]]
   branch = "v2"
@@ -34,6 +64,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "73d88fb07deab8f540c47cac093790ca133a35ac27c55276d6727ea7574c310d"
+  inputs-digest = "678eff1d1f54421472b4a4fcb5b491fccad74620e4d29dd723e605079ca203b6"
   solver-name = "gps-cdcl"
   solver-version = 1

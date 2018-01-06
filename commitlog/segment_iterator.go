@@ -42,8 +42,8 @@ func (s *segmentIterator) next() (msg *segmentMessage, ok bool, err error) {
 		return
 	}
 
-	msgLen := int32(binary.LittleEndian.Uint32(lengthAndOffset[:4]))
-	offset := int64(binary.LittleEndian.Uint32(lengthAndOffset[4:8])) + s.segment.baseOffset
+	msgLen := int32(binary.BigEndian.Uint32(lengthAndOffset[:4]))
+	offset := int64(binary.BigEndian.Uint32(lengthAndOffset[4:8])) + s.segment.baseOffset
 
 	ok = true
 	msg = &segmentMessage{msgLen, offset, s.pos}
