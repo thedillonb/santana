@@ -19,7 +19,7 @@ const (
 	logFileSuffix   = ".log"
 	indexFileSuffix = ".index"
 
-	configFileName = "config.cfg"
+	configFileName = "config"
 )
 
 var logger = l.NewLogger("commitlog")
@@ -29,7 +29,7 @@ type CommitLogOptions struct {
 	FlushInterval int    `json:"flushInterval"`
 	IndexMaxBytes int    `json:"indexMaxBytes"`
 	LogMaxBytes   int    `json:"logMaxBytes"`
-	TTL           int    `json:"ttl"`
+	TTL           int32  `json:"ttl"`
 }
 
 type CommitLog struct {
@@ -65,7 +65,7 @@ func OpenCommitLog(dir string) (*CommitLog, error) {
 
 func NewCommitLog(opts CommitLogOptions) (*CommitLog, error) {
 	if opts.FlushInterval == 0 {
-		opts.FlushInterval = 1
+		opts.FlushInterval = 10000
 	}
 	if opts.LogMaxBytes == 0 {
 		opts.LogMaxBytes = 1024 * 1024 * 1024
@@ -163,29 +163,8 @@ func (c *CommitLog) appendNewSegment(baseOffset int64) (*segment, error) {
 	return segment, nil
 }
 
-func (c *CommitLog) Append(b []byte) (offset int64, err error) {
-	c.mutex.Lock()
-
-	if c.activeSegment.isFull() {
-		logger.Info("%s is full; rotating...", c.Name())
-
-		var newSeg *segment
-		if newSeg, err = c.appendNewSegment(c.nextOffset); err != nil {
-			return
-		}
-
-		c.activeSegment = newSeg
-		if c.nextOffset, err = newSeg.getNextOffset(); err != nil {
-			return
-		}
-	}
-
-	offset = c.nextOffset
-	c.nextOffset++
-	err = c.activeSegment.append(offset, b)
-
-	c.mutex.Unlock()
-
+func (c *CommitLog) Append(data [][]byte) (offset int64, err error) {
+	offset, err = c.appendData(data)
 	if err != nil {
 		return
 	}
@@ -193,6 +172,36 @@ func (c *CommitLog) Append(b []byte) (offset int64, err error) {
 	if c.getUnflushedMessages() >= int64(c.FlushInterval) {
 		if err = c.flush(); err != nil {
 			return
+		}
+	}
+
+	return
+}
+
+func (c *CommitLog) appendData(data [][]byte) (offset int64, err error) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	for _, b := range data {
+		if c.activeSegment.isFull() {
+			logger.Info("%s is full; rotating...", c.Name())
+
+			var newSeg *segment
+			if newSeg, err = c.appendNewSegment(c.nextOffset); err != nil {
+				return
+			}
+
+			c.activeSegment = newSeg
+			if c.nextOffset, err = newSeg.getNextOffset(); err != nil {
+				return
+			}
+		}
+
+		offset = c.nextOffset
+		c.nextOffset++
+		err = c.activeSegment.append(offset, b)
+		if err != nil {
+			break
 		}
 	}
 
@@ -267,4 +276,16 @@ func (c *CommitLog) flushFromOffset(offset int64) error {
 
 func (c *CommitLog) Name() string {
 	return path.Base(c.Path)
+}
+
+func (c *CommitLog) MaxOffset() int64 {
+	return c.nextOffset - 1
+}
+
+func (c *CommitLog) MinOffset() int64 {
+	if len(c.segments) == 0 {
+		return -1
+	}
+
+	return c.segments[0].baseOffset
 }

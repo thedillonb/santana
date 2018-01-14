@@ -87,11 +87,16 @@ func (s *LogManager) GetLog(name string) (*CommitLog, error) {
 	return nil, ErrLogNotFound
 }
 
-func (s *LogManager) GetLogs() []string {
-	var logs []string
+func (s *LogManager) GetLogs() []LogInfo {
+	var logs []LogInfo
 
-	for k := range s.logs {
-		logs = append(logs, k)
+	for name, l := range s.logs {
+		logs = append(logs, LogInfo{
+			Name:      name,
+			MaxOffset: l.MaxOffset(),
+			MinOffset: l.MinOffset(),
+			Retention: l.TTL,
+		})
 	}
 
 	return logs

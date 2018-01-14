@@ -26,6 +26,10 @@ type index struct {
 
 const fileEntrySize = 8
 
+var (
+	ErrOffsetOutOfRange = errors.New("request offset out of range")
+)
+
 func newIndex(opts indexOptions) (idx *index, err error) {
 	if opts.maxBytes == 0 {
 		return nil, errors.New("invalid index max bytes")
@@ -95,7 +99,7 @@ func (idx *index) append(offset int64, position int64) error {
 
 func (idx *index) lookup(offset int64) (position int64, err error) {
 	if offset < idx.baseOffset || offset > idx.lastOffset {
-		err = errors.Errorf("offset outside of range: %v < %v < %v ", idx.baseOffset, offset, idx.lastOffset)
+		err = ErrOffsetOutOfRange
 		return
 	}
 

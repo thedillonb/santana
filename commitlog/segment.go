@@ -30,6 +30,10 @@ type segment struct {
 	position int64
 }
 
+var (
+	ErrBufferToSmall = errors.New("not enough buffer space for message")
+)
+
 func newSegment(opts segmentOptions) (seg *segment, err error) {
 	if opts.maxLogSize <= 0 {
 		return nil, errors.New("invalid maxLogSize")
@@ -129,7 +133,7 @@ func (s *segment) readAt(b []byte, offset int64) (n int, err error) {
 
 	msgLen := binary.BigEndian.Uint32(length)
 	if int(msgLen) > len(b) {
-		return n, errors.New("not enough buffer space for message")
+		return n, ErrBufferToSmall
 	}
 
 	n, err = s.log.ReadAt(b[:msgLen], int64(position)+4)
