@@ -27,8 +27,20 @@ func main() {
 		panic(err)
 	}
 
-	if _, err := mgr.CreateLog("analytics", commitlog.CommitLogOptions{}); err != nil {
-		panic(err)
+	logs := mgr.GetLogs()
+	dbExists := false
+
+	for _, l := range logs {
+		if l.Name == "analytics" {
+			dbExists = true
+			break
+		}
+	}
+
+	if !dbExists {
+		if _, err := mgr.CreateLog("analytics", commitlog.CommitLogOptions{}); err != nil {
+			panic(err)
+		}
 	}
 
 	fmt.Printf("Loaded logs: %v\n", mgr.GetLogs())

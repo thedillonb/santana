@@ -55,8 +55,11 @@ func (s *handler) Read(ctx context.Context, req *protocol.ReadRequest) (*protoco
 	start := 0
 	var data [][]byte
 
+	idx := req.Index
+
 	for {
-		n, err := l.ReadAt(b[start:], int64(req.Index))
+		var n int
+		n, err = l.ReadAt(b[start:], idx)
 		if err == commitlog.ErrOffsetOutOfRange {
 			break
 		}
@@ -69,6 +72,7 @@ func (s *handler) Read(ctx context.Context, req *protocol.ReadRequest) (*protoco
 
 		data = append(data, b[start+4:start+n])
 		start = start + n
+		idx = idx + 1
 	}
 
 	if len(data) == 0 {

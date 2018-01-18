@@ -13,7 +13,7 @@ func NewLogger(name string) Logger {
 }
 
 func (l Logger) Debug(format string, args ...interface{}) {
-	log.Printf("DEBG "+format, args...)
+	// log.Printf("DEBG "+format, args...)
 }
 
 func (l Logger) Info(format string, args ...interface{}) {
