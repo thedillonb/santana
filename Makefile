@@ -13,11 +13,11 @@ build: clean
 
 build_lineserver:
 	if [ -f dist/line-server ] ; then rm dist/line-server ; fi
-	GOOS=linux GOARCH=amd64 go build ${LDFLAGS} -o dist/line-server ./cmd/line-server/main.go
+	 go build ${LDFLAGS} -o dist/line-server ./cmd/line-server/main.go
 
 build_reader:
 	if [ -f dist/reader ] ; then rm dist/reader ; fi
-	GOOS=linux GOARCH=amd64 go build ${LDFLAGS} -o dist/reader ./cmd/reader/main.go
+	 go build ${LDFLAGS} -o dist/reader ./cmd/reader/main.go
 
 clean:
 	if [ -f ${} ] ; then rm ${BINARY} ; fi

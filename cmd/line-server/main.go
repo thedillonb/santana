@@ -55,6 +55,11 @@ func main() {
 		panic(err)
 	}
 
+	kafkaServer := server.NewKafkaServer(mgr)
+	if err := kafkaServer.Listen(":9092"); err != nil {
+		panic(err)
+	}
+
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	<-c
