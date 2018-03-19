@@ -289,3 +289,8 @@ func (c *CommitLog) MinOffset() int64 {
 
 	return c.segments[0].baseOffset
 }
+
+func (c *CommitLog) clean() {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+}

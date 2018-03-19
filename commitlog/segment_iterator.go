@@ -13,9 +13,10 @@ type segmentIterator struct {
 }
 
 type segmentMessage struct {
-	length   int32
-	offset   int64
-	position int64
+	length    int32
+	offset    int64
+	position  int64
+	timestamp int32
 }
 
 func newSegmentIterator(segment *segment, pos int64) *segmentIterator {
@@ -23,8 +24,8 @@ func newSegmentIterator(segment *segment, pos int64) *segmentIterator {
 }
 
 func (s *segmentIterator) next() (msg *segmentMessage, ok bool, err error) {
-	lengthAndOffset := make([]byte, 8)
-	n, err := s.segment.log.ReadAt(lengthAndOffset, s.pos)
+	metadata := make([]byte, 12)
+	n, err := s.segment.log.ReadAt(metadata, s.pos)
 
 	if err != nil {
 		ok = false
@@ -36,17 +37,18 @@ func (s *segmentIterator) next() (msg *segmentMessage, ok bool, err error) {
 		return
 	}
 
-	if n != len(lengthAndOffset) {
+	if n != len(metadata) {
 		ok = false
 		err = errors.New("not enough data was read")
 		return
 	}
 
-	msgLen := int32(binary.BigEndian.Uint32(lengthAndOffset[:4]))
-	offset := int64(binary.BigEndian.Uint32(lengthAndOffset[4:8])) + s.segment.baseOffset
+	msgLen := int32(binary.BigEndian.Uint32(metadata[:4]))
+	offset := int64(binary.BigEndian.Uint32(metadata[4:8])) + s.segment.baseOffset
+	timestamp := int32(binary.BigEndian.Uint32(metadata[8:12]))
 
 	ok = true
-	msg = &segmentMessage{msgLen, offset, s.pos}
+	msg = &segmentMessage{msgLen, offset, s.pos, timestamp}
 	s.pos += 4 + int64(msgLen)
 	return
 }

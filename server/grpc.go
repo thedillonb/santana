@@ -70,7 +70,7 @@ func (s *handler) Read(ctx context.Context, req *protocol.ReadRequest) (*protoco
 			return nil, err
 		}
 
-		data = append(data, b[start+4:start+n])
+		data = append(data, b[start+8:start+n])
 		start = start + n
 		idx = idx + 1
 	}

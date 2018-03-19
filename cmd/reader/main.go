@@ -23,8 +23,7 @@ var (
 	logName   = flag.String("log", "analytics", "the log to read from")
 	indexFile = flag.String("index", "index.idx", "the index file")
 
-	offsets map[string]int
-
+	offsets    map[string]int
 	offsetLock sync.Mutex
 )
 
@@ -100,7 +99,18 @@ func consumer() chan<- []string {
 			}
 
 			if resp.StatusCode != 204 && resp.StatusCode != 200 {
-				fmt.Printf("Status code was %v\n", resp.Status)
+				defer resp.Body.Close()
+
+				var dat map[string]interface{}
+				dec := json.NewDecoder(resp.Body)
+				err := dec.Decode(&dat)
+
+				if err == nil {
+					fmt.Printf("%v: %v\n", resp.Status, dat["error"].(string))
+				} else {
+					fmt.Printf("%v: %v\n", resp.Status, err.Error())
+				}
+
 				continue
 			}
 		}

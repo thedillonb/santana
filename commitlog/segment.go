@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/pkg/errors"
 )
@@ -101,8 +102,9 @@ func (s *segment) append(offset int64, b []byte) error {
 	defer s.mutex.Unlock()
 
 	msg := message{
-		data:   b,
-		offset: int32(offset - s.baseOffset),
+		data:      b,
+		offset:    int32(offset - s.baseOffset),
+		timestamp: int32(time.Now().Unix()),
 	}
 
 	n, err := msg.writeTo(s.log)
