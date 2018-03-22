@@ -86,6 +86,8 @@ func (s *KafkaServer) handleConnection(conn net.Conn) {
 			req = &protocol.ProduceRequest{}
 		case protocol.FetchKey:
 			req = &protocol.FetchRequest{}
+		case protocol.OffsetsKey:
+			req = &protocol.OffsetsRequest{}
 		}
 
 		if err := req.Decode(d); err != nil {
@@ -100,12 +102,44 @@ func (s *KafkaServer) handleConnection(conn net.Conn) {
 				APIVersions: []protocol.APIVersion{
 					{APIKey: protocol.ProduceKey, MinVersion: 2, MaxVersion: 2},
 					{APIKey: protocol.FetchKey, MinVersion: 1, MaxVersion: 1},
-					{APIKey: protocol.OffsetsKey, MinVersion: 2, MaxVersion: 2},
+					{APIKey: protocol.OffsetsKey, MinVersion: 0, MaxVersion: 0},
 					{APIKey: protocol.MetadataKey},
 					{APIKey: protocol.APIVersionsKey},
-					{APIKey: protocol.CreateTopicsKey},
-					{APIKey: protocol.DeleteTopicsKey},
 				},
+			}
+
+		case *protocol.OffsetsRequest:
+			prodReq := req.(*protocol.OffsetsRequest)
+			prodResp := make([]*protocol.OffsetResponse, 0, len(prodReq.Topics))
+
+			for _, t := range prodReq.Topics {
+
+				log, err := s.LogManager.GetLog(t.Topic)
+				if err != nil {
+					panic(err)
+				}
+
+				minOff := log.MinOffset()
+				maxOff := log.MaxOffset()
+				fmt.Printf("Offsets for %v = %v/%v\n", t.Topic, minOff, maxOff)
+
+				partResp := make([]*protocol.PartitionResponse, 0, len(t.Partitions))
+				for _, p := range t.Partitions {
+					partResp = append(partResp, &protocol.PartitionResponse{
+						ErrorCode: 0,
+						Offsets:   []int64{maxOff},
+						Partition: p.Partition,
+					})
+				}
+
+				prodResp = append(prodResp, &protocol.OffsetResponse{
+					PartitionResponses: partResp,
+					Topic:              t.Topic,
+				})
+			}
+
+			resp = &protocol.OffsetsResponse{
+				Responses: prodResp,
 			}
 
 		case *protocol.MetadataRequest:
@@ -151,7 +185,7 @@ func (s *KafkaServer) handleConnection(conn net.Conn) {
 
 				for _, d := range t.Data {
 					fmt.Printf("Appending %v\n", d.RecordSet)
-					off, err := l.Append([][]byte{d.RecordSet})
+					off, err := l.Append(d.RecordSet)
 					if err != nil {
 						panic(err)
 					}
@@ -188,26 +222,27 @@ func (s *KafkaServer) handleConnection(conn net.Conn) {
 				pres := make([]*protocol.FetchPartitionResponse, 0, len(t.Partitions))
 
 				for _, p := range t.Partitions {
-					fmt.Printf("Requsting at %v\n", p.FetchOffset)
+					fmt.Printf("Requesting at %v - max %v\n", p.FetchOffset, l.MaxOffset())
 
 					buff := make([]byte, p.MaxBytes)
 					n, err := l.ReadAt(buff, p.FetchOffset)
 
 					if err != nil {
 						if err == io.EOF {
+							fmt.Printf("Hit EOF\n")
 							pres = append(pres, &protocol.FetchPartitionResponse{
-								ErrorCode:     1,
+								ErrorCode:     0,
 								Partition:     p.Partition,
 								RecordSet:     []byte{},
-								HighWatermark: 0,
+								HighWatermark: l.MaxOffset(),
 							})
 
 							continue
 						} else {
-							fmt.Printf("%s\n", err.Error())
+							fmt.Printf("Fetch Response: %s\n", err.Error())
 
 							pres = append(pres, &protocol.FetchPartitionResponse{
-								ErrorCode:     -1,
+								ErrorCode:     0,
 								Partition:     p.Partition,
 								RecordSet:     []byte{},
 								HighWatermark: l.MaxOffset(),
@@ -217,10 +252,12 @@ func (s *KafkaServer) handleConnection(conn net.Conn) {
 						}
 					}
 
+					fmt.Printf("Read: %v\n", buff[:n])
+
 					pres = append(pres, &protocol.FetchPartitionResponse{
 						ErrorCode:     0,
 						Partition:     p.Partition,
-						RecordSet:     buff[4:n],
+						RecordSet:     buff[:n],
 						HighWatermark: l.MaxOffset(),
 					})
 				}
@@ -235,6 +272,8 @@ func (s *KafkaServer) handleConnection(conn net.Conn) {
 				Responses:      fres,
 				ThrottleTimeMs: 0,
 			}
+
+			time.Sleep(2 * time.Second)
 		}
 
 		if resp == nil {

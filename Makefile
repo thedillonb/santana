@@ -5,9 +5,6 @@ LDFLAGS=-ldflags "-X main.build=${BUILD}"
 
 .PHONY: build clean
 
-gen:
-	protoc -I protocol/ protocol/protocol.proto --go_out=plugins=grpc:protocol
-
 build: clean
 	go build ${LDFLAGS} -o ${BINARY} ${PACKAGE}
 
@@ -20,4 +17,4 @@ build_reader:
 	GOOS=linux GOARCH=amd64  go build ${LDFLAGS} -o dist/reader ./cmd/reader/main.go
 
 clean:
-	if [ -f ${} ] ; then rm ${BINARY} ; fi
+	if [ -f ${BINARY} ] ; then rm ${BINARY} ; fi

@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"time"
 
 	"github.com/pkg/errors"
 )
@@ -98,16 +97,13 @@ func (s *segment) append(offset int64, b []byte) error {
 		return errors.New("log is full")
 	}
 
+	ms := MessageSet(b)
+	ms.PutOffset(offset)
+
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	msg := message{
-		data:      b,
-		offset:    int32(offset - s.baseOffset),
-		timestamp: int32(time.Now().Unix()),
-	}
-
-	n, err := msg.writeTo(s.log)
+	n, err := s.log.Write(ms)
 	if err != nil {
 		return err
 	}
@@ -125,7 +121,7 @@ func (s *segment) readAt(b []byte, offset int64) (n int, err error) {
 	}
 
 	length := make([]byte, 4)
-	n, err = s.log.ReadAt(length, int64(position))
+	n, err = s.log.ReadAt(length, int64(position)+8)
 	if err != nil {
 		return n, err
 	}
@@ -133,12 +129,12 @@ func (s *segment) readAt(b []byte, offset int64) (n int, err error) {
 		return n, errors.New("not enough data was read")
 	}
 
-	msgLen := binary.BigEndian.Uint32(length)
+	msgLen := binary.BigEndian.Uint32(length) + 12
 	if int(msgLen) > len(b) {
 		return n, ErrBufferToSmall
 	}
 
-	n, err = s.log.ReadAt(b[:msgLen], int64(position)+4)
+	n, err = s.log.ReadAt(b[:msgLen], int64(position))
 	return
 }
 

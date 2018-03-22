@@ -163,7 +163,7 @@ func (c *CommitLog) appendNewSegment(baseOffset int64) (*segment, error) {
 	return segment, nil
 }
 
-func (c *CommitLog) Append(data [][]byte) (offset int64, err error) {
+func (c *CommitLog) Append(data []byte) (offset int64, err error) {
 	offset, err = c.appendData(data)
 	if err != nil {
 		return
@@ -178,33 +178,28 @@ func (c *CommitLog) Append(data [][]byte) (offset int64, err error) {
 	return
 }
 
-func (c *CommitLog) appendData(data [][]byte) (offset int64, err error) {
+func (c *CommitLog) appendData(data []byte) (offset int64, err error) {
+
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	for _, b := range data {
-		if c.activeSegment.isFull() {
-			logger.Info("%s is full; rotating...", c.Name())
+	if c.activeSegment.isFull() {
+		logger.Info("%s is full; rotating...", c.Name())
 
-			var newSeg *segment
-			if newSeg, err = c.appendNewSegment(c.nextOffset); err != nil {
-				return
-			}
-
-			c.activeSegment = newSeg
-			if c.nextOffset, err = newSeg.getNextOffset(); err != nil {
-				return
-			}
+		var newSeg *segment
+		if newSeg, err = c.appendNewSegment(c.nextOffset); err != nil {
+			return
 		}
 
-		offset = c.nextOffset
-		c.nextOffset++
-		err = c.activeSegment.append(offset, b)
-		if err != nil {
-			break
+		c.activeSegment = newSeg
+		if c.nextOffset, err = newSeg.getNextOffset(); err != nil {
+			return
 		}
 	}
 
+	offset = c.nextOffset
+	c.nextOffset++
+	err = c.activeSegment.append(offset, data)
 	return
 }
 
@@ -279,7 +274,7 @@ func (c *CommitLog) Name() string {
 }
 
 func (c *CommitLog) MaxOffset() int64 {
-	return c.nextOffset - 1
+	return c.nextOffset
 }
 
 func (c *CommitLog) MinOffset() int64 {

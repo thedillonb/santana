@@ -45,16 +45,6 @@ func main() {
 
 	fmt.Printf("Loaded logs: %v\n", mgr.GetLogs())
 
-	lineServer := server.LineServer{LogManager: mgr}
-	if err := lineServer.Listen(":9931"); err != nil {
-		panic(err)
-	}
-
-	rpcServer := server.NewServer(server.ServerOptions{LogManager: mgr})
-	if err := rpcServer.Listen(":9932"); err != nil {
-		panic(err)
-	}
-
 	kafkaServer := server.NewKafkaServer(mgr)
 	if err := kafkaServer.Listen(":9092"); err != nil {
 		panic(err)
@@ -65,7 +55,5 @@ func main() {
 	<-c
 
 	fmt.Printf("Closing...\n")
-	lineServer.Close()
-	rpcServer.Close()
 	mgr.Close()
 }

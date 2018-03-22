@@ -13,10 +13,9 @@ type segmentIterator struct {
 }
 
 type segmentMessage struct {
-	length    int32
-	offset    int64
-	position  int64
-	timestamp int32
+	length   int32
+	offset   int64
+	position int64
 }
 
 func newSegmentIterator(segment *segment, pos int64) *segmentIterator {
@@ -43,12 +42,11 @@ func (s *segmentIterator) next() (msg *segmentMessage, ok bool, err error) {
 		return
 	}
 
-	msgLen := int32(binary.BigEndian.Uint32(metadata[:4]))
-	offset := int64(binary.BigEndian.Uint32(metadata[4:8])) + s.segment.baseOffset
-	timestamp := int32(binary.BigEndian.Uint32(metadata[8:12]))
+	offset := int64(binary.BigEndian.Uint64(metadata[:8]))
+	msgLen := int32(binary.BigEndian.Uint32(metadata[8:12]))
 
 	ok = true
-	msg = &segmentMessage{msgLen, offset, s.pos, timestamp}
+	msg = &segmentMessage{msgLen, offset, s.pos}
 	s.pos += 4 + int64(msgLen)
 	return
 }

@@ -28,11 +28,3 @@
 [[constraint]]
   branch = "master"
   name = "github.com/edsrzf/mmap-go"
-
-[[constraint]]
-  name = "github.com/abiosoft/ishell"
-  version = "1.0.0"
-
-[[constraint]]
-  branch = "v2"
-  name = "gopkg.in/abiosoft/ishell.v2"
