@@ -88,6 +88,8 @@ func (s *KafkaServer) handleConnection(conn net.Conn) {
 			req = &protocol.FetchRequest{}
 		case protocol.OffsetsKey:
 			req = &protocol.OffsetsRequest{}
+		default:
+			panic(fmt.Errorf("no such handler exists for %v", header.APIKey))
 		}
 
 		if err := req.Decode(d); err != nil {
@@ -183,8 +185,9 @@ func (s *KafkaServer) handleConnection(conn net.Conn) {
 					panic(err)
 				}
 
+				fmt.Printf("Appending %v entries.\n", len(t.Data))
+
 				for _, d := range t.Data {
-					fmt.Printf("Appending %v\n", d.RecordSet)
 					off, err := l.Append(d.RecordSet)
 					if err != nil {
 						panic(err)
