@@ -1,7 +1,6 @@
 package commitlog
 
 import (
-	"encoding/binary"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -120,21 +119,7 @@ func (s *segment) readAt(b []byte, offset int64) (n int, err error) {
 		return 0, err
 	}
 
-	length := make([]byte, 4)
-	n, err = s.log.ReadAt(length, int64(position)+8)
-	if err != nil {
-		return n, err
-	}
-	if n != 4 {
-		return n, errors.New("not enough data was read")
-	}
-
-	msgLen := binary.BigEndian.Uint32(length) + 12
-	if int(msgLen) > len(b) {
-		return n, ErrBufferToSmall
-	}
-
-	n, err = s.log.ReadAt(b[:msgLen], int64(position))
+	n, err = s.log.ReadAt(b, int64(position))
 	return
 }
 

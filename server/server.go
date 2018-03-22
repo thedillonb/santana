@@ -222,27 +222,27 @@ func (s *KafkaServer) handleConnection(conn net.Conn) {
 				pres := make([]*protocol.FetchPartitionResponse, 0, len(t.Partitions))
 
 				for _, p := range t.Partitions {
-					fmt.Printf("Requesting at %v - max %v\n", p.FetchOffset, l.MaxOffset())
+					maxOff := l.MaxOffset()
+					fmt.Printf("Requesting at %v - max %v\n", p.FetchOffset, maxOff)
 
 					buff := make([]byte, p.MaxBytes)
+					tries := 0
+
+				try_again:
 					n, err := l.ReadAt(buff, p.FetchOffset)
 
 					if err != nil {
-						if err == io.EOF {
-							fmt.Printf("Hit EOF\n")
-							pres = append(pres, &protocol.FetchPartitionResponse{
-								ErrorCode:     0,
-								Partition:     p.Partition,
-								RecordSet:     []byte{},
-								HighWatermark: l.MaxOffset(),
-							})
-
-							continue
+						if err == commitlog.ErrOffsetOutOfRange || err == io.EOF {
+							if n == 0 && tries == 0 {
+								tries++
+								time.Sleep(time.Duration(freq.MaxWaitTime) * time.Millisecond)
+								goto try_again
+							}
 						} else {
 							fmt.Printf("Fetch Response: %s\n", err.Error())
 
 							pres = append(pres, &protocol.FetchPartitionResponse{
-								ErrorCode:     0,
+								ErrorCode:     -1,
 								Partition:     p.Partition,
 								RecordSet:     []byte{},
 								HighWatermark: l.MaxOffset(),
@@ -251,8 +251,6 @@ func (s *KafkaServer) handleConnection(conn net.Conn) {
 							continue
 						}
 					}
-
-					fmt.Printf("Read: %v\n", buff[:n])
 
 					pres = append(pres, &protocol.FetchPartitionResponse{
 						ErrorCode:     0,
@@ -272,8 +270,6 @@ func (s *KafkaServer) handleConnection(conn net.Conn) {
 				Responses:      fres,
 				ThrottleTimeMs: 0,
 			}
-
-			time.Sleep(2 * time.Second)
 		}
 
 		if resp == nil {
